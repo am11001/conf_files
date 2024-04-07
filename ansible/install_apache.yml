@@ -1,0 +1,173 @@
+- hosts: all
+  become: true
+  tasks: 
+
+  - name: Update apt packages
+    become: yes
+    apt:
+      upgrade: yes
+      update_cache: yes
+  - name: install apache2 package
+    apt:
+      name: apache2
+  - name: Install MySQL database server
+    apt:
+      name: mysql-server
+      state: present
+
+  - name: Install PHP
+    apt:
+      name: "{{ item }}"
+      state: present
+    loop:
+      - php
+      - php-mysql
+      - php-curl
+      - php-gd
+      - php-mbstring
+      - php-xml
+      - php-xmlrpc
+      - php-soap
+      - php-intl
+      - php-zip
+
+
+
+  - name: Download WordPress
+    get_url:
+      url: "https://wordpress.org/latest.tar.gz"
+      dest: "/tmp/wordpress.tar.gz"
+
+  - name: Unarchive WordPress
+    unarchive:
+      src: "/tmp/wordpress.tar.gz"
+      dest: "/var/www/"
+      remote_src: yes
+
+  - name: Download Drupal
+    get_url:
+      url: "https://www.drupal.org/download-latest/tar.gz"
+      dest: "/tmp/drupal.tar.gz"
+
+  - name: Get information about Drupal directory
+    stat:
+      path: "/var/www/drupal"
+    register: drupal_directory
+
+  - name: Create Drupal directory if it doesn't exist
+    file:
+      path: "/var/www/drupal"
+      state: directory
+    when: not drupal_directory.stat.exists
+
+  - name: Unarchive Drupal
+    unarchive:
+      src: "/tmp/drupal.tar.gz"
+      dest: "/var/www/drupal"
+      remote_src: yes
+      extra_opts: [--strip-components=1]  
+    
+  - name: Disable Apache on port 80
+    become: true
+    lineinfile:
+      path: /etc/apache2/ports.conf
+      regexp: "^Listen 80$"
+      state: absent
+    notify: Restart Apache
+    
+
+  - name: Deploy Apache configuration for Drupal
+    get_url:
+      url: "https://raw.githubusercontent.com/am11001/conf_files/files/dr-wp.conf"
+      dest: /etc/apache2/sites-available/dr-wp.conf
+    notify: Reload Apache
+
+
+
+  - name: Enable apache sites
+    command: a2ensite dr-wp.conf
+    notify:
+      - Reload Apache
+
+  - name: Copy Drupal settings.php file
+    become: true
+    shell: cp /var/www/drupal/sites/default/default.settings.php /var/www/drupal/sites/default/settings.php 
+      
+  - name: Restart Apache
+    service:
+      name: apache2
+      state: restarted
+
+  - name: Change "/var/www/" permissions
+    become: true
+    shell: cp /var/www/drupal/sites/default/default.settings.php /var/www/drupal/sites/default/settings.php 
+ 
+  - name: Download init.sql script
+    get_url:
+      url: "https://raw.githubusercontent.com/am11001/conf_files/files/init.sql" 
+      dest: "/tmp/init.sql"              
+
+  - name: Run MySQL command to execute init.sql script
+    become: true
+    shell: mysql -u root < /tmp/init.sql
+    notify: Restart MySQL
+      
+
+  - name: Install Nginx
+    apt:
+      name: nginx
+      state: present
+    when: ansible_os_family == 'Debian'
+  
+  - name: Start Nginx service
+    service:
+      name: nginx
+      state: started
+
+  - name: Enable Nginx service 
+    service:
+      name: nginx
+      enabled: yes
+
+  - name: Download nginx.conf
+    get_url:
+      url: "https://raw.githubusercontent.com/am11001/conf_files/files/nginx.conf"  
+      dest: "/etc/nginx/conf.d/nginx.conf"
+    notify:
+        - Restart Nginx
+
+  - name: Change ownership of /var/www/
+    become: true
+    file:
+      path: /var/www/
+      owner: www-data
+      group: www-data
+      recurse: yes
+  
+  - name: Change permissions of /var/www/
+    become: true
+    file:
+      path: /var/www/
+      mode: '0777'
+      recurse: yes
+  
+  handlers:
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
+
+    - name: Restart Apache
+      service:
+        name: apache2
+        state: restarted
+
+    - name: Reload Apache
+      service:
+        name: apache2
+        state: reloaded
+
+    - name: Restart MySQL
+      service:
+        name: mysql
+        state: restarted

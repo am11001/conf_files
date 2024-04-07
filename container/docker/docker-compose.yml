@@ -1,0 +1,86 @@
+version: "3" 
+services:
+  my-db:
+    image: mysql
+    networks:
+      - my-network
+    restart: unless-stopped
+    volumes:
+      - db:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: wordpress_1
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+      
+  my-wordpress:
+    image: wordpress
+    networks:
+      - my-network
+    restart: unless-stopped
+    ports:
+      - 8080:80
+    depends_on:
+      - my-db
+    environment:
+      WORDPRESS_DB_HOST: my-db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wordpress:/var/www/html
+      
+  my-db1:
+    image: mysql
+    networks:
+      - my-network
+    restart: unless-stopped
+    volumes:
+      - db1:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: wordpress_1
+      MYSQL_DATABASE: drupaldb
+      MYSQL_USER: drupaluser
+      MYSQL_PASSWORD: password
+      
+  my-drupal:
+    image: drupal:10-apache
+    depends_on:
+      - my-db1
+    volumes:
+      - /var/www/html/modules
+      - /var/www/html/profiles
+      - /var/www/html/themes
+      - /var/www/html/sites
+    restart: unless-stopped
+    environment:
+      - MYSQL_HOST=my-db1
+      - MYSQL_DATABASE=drupaldb
+      - MYSQL_USER=drupaluser
+      - MYSQL_PASSWORD=password
+    networks:
+      - my-network
+
+  webserver:
+    image: nginx:1.17.4-alpine
+    container_name: webserver
+    depends_on:
+      - my-wordpress
+      - my-drupal
+    restart: unless-stopped
+    ports:
+      - 80:80
+    volumes:
+      - ./conf:/etc/nginx/conf.d
+    networks:
+      - my-network
+
+
+networks:
+  my-network:
+    driver: bridge
+
+volumes:
+  wordpress:
+  db:
+  db1:

@@ -1,0 +1,52 @@
+version: "3" 
+services:
+  my-db:
+    image: docker.io/library/mysql:8.0
+    networks:
+      - my-network
+    restart: unless-stopped
+    volumes:
+      - db:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: wordpress_1
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+      
+  my-wordpress:
+    image: docker.io/library/wordpress
+    networks:
+      - my-network
+    restart: unless-stopped
+    depends_on:
+      - my-db
+    environment:
+      WORDPRESS_DB_HOST: my-db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wordpress:/var/www/html
+
+  webserver:
+    image: docker.io/library/nginx:1.17.4-alpine
+    container_name: webserver
+    depends_on:
+      - my-wordpress
+    restart: unless-stopped
+    ports:
+      - 80:80
+    volumes:
+      - wordpress:/var/www/html
+      - ./conf:/etc/nginx/conf.d
+    networks:
+      - my-network
+
+
+networks:
+  my-network:
+    driver: bridge
+
+volumes:
+  wordpress:
+  db:
